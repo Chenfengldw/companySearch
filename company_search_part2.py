@@ -23,7 +23,7 @@ import xlrd
 import xlwt
 import sys
 import time
-
+import thread
 '''output_list = ['CIK', 'Filings', 'Period_of_Report', 'Filing_Date', 'Well_Known_Seasoned_Issuer',
                'Not_Required_to_File', 'Large_Accelerated_Filer', 'Accelerated_Filer', 'Non_Accelerated_Filer',
                'Smaller_Reporting_Company', 'Shell_Company', 'Proxy_Incorporated_by_Reference', 'Used_COSO',
@@ -127,7 +127,7 @@ def get_item_list(cik_num, filing_type):
     return table
 
 
-def report_error(cik, filing_type):
+def report_error(cik, filing_type,row_num,output_table):
     output_table.write(row_num, 0, cik)
     output_table.write(row_num, 1, filing_type)
     output_table.write(row_num, 2, 'No matching CIK')
@@ -137,13 +137,13 @@ def get_web_address(item, time_threshold):
     base_address = 'https://www.sec.gov'
     filing_date = item.contents[7].contents[0][0:4]+item.contents[7].contents[0][5:7]+item.contents[7].contents[0][8:10]
     #print item.contents[7].contents[0]
-    if string.atoi(filing_date) <= time_threshold:
+    if string.atoi(filing_date) <= string.atoi(time_threshold):
         return 0
     item_address = base_address+item.a['href']
     return item_address
 
 
-def get_general(web_address, cik, filing_type):
+def get_general(web_address, cik, filing_type,row_num,output_table):
     et = open_url(web_address)
     if et == -2:
         return -2
@@ -151,6 +151,7 @@ def get_general(web_address, cik, filing_type):
     form_content = soup_each.findAll('div', {'class': 'formGrouping'})
 
     # write the cik to excel
+    print "row_num is" +str(row_num)
     output_table.write(row_num, 0, cik)
     # write the filing_type to excel
     output_table.write(row_num, 1, filing_type)
@@ -205,7 +206,7 @@ def clean(document, document_type):
     return document
 
 
-def item701801(ft):
+def item701801(ft,row_num,output_table):
     p1 = ft.find('Item 7.01',0)
     p2 = ft.find('Item 8.01',0)
     p3 = ft.find('Item 9.01',0)
@@ -218,20 +219,17 @@ def item701801(ft):
             stop = p2
             tmpft = clean(ft[start:stop],0)
             output_table.write(row_num,4, tmpft)
-            print(7.01)
 
         elif(p3!=-1):
             start = ft.find('Item 7.01',p1)+len('Item 7.01')
             stop = p3
             tmpft = clean(ft[start:stop],0)
             output_table.write(row_num,4, tmpft)
-            print(7.01)
         else:
             start = ft.find('Item 7.01',p1)+len('Item 7.01')
             stop = p4
             tmpft = clean(ft[start:stop],0)
             output_table.write(row_num,4, tmpft)
-            print(7.01)
 
 
     if (p2!=-1):#find item 8.01
@@ -426,37 +424,32 @@ def coso(ft):
             output_table.write(row_num, 13, 2013)
 
 
-def main(filing_type, time_threshold):
+def main(filing_type, time_threshold,i,j,cik_list):
     # for each cik get the web list
-    print "start "+filing_type+"collection"
-    cik_list = get_cik_list()
-    output_file = xlwt.Workbook()
-    global output_table
-    global symbol
-    output_table = output_file.add_sheet('Sheet1', cell_overwrite_ok=True)
-    for i in range(len(output_list)):
-        output_table.write(0, i, output_list[i])
+    print "start "+filing_type+"collection from"+str(i)+"to"+str(j)+'\n'
+    tmpname = 'from'+str(i)+'to'+str(j)
 
+    global output_file
+    output_table = output_file.add_sheet(tmpname, cell_overwrite_ok=True)
+    for m in range(len(output_list)):
+        output_table.write(0, m, output_list[m])
     # for each available item get basic information
-    global row_num
     global recursive_count
     recursive_count = 0
     row_num = 1
-    cik_count = 0
-    cik_total = len(cik_list)
-    for cik in cik_list:
-        #for date in date_list:
+    for cik in cik_list[i:j]:
+            print str(cik)+'\n'
             item_list = get_item_list(cik, filing_type)
             if item_list == -2:
                 continue
-
+            #print "point 1"
             # check if no filings
             if len(item_list) == 0:
-                report_error(cik, filing_type)
+                report_error(cik, filing_type,row_num,output_table)
                 print 'error'
                 row_num += 1
                 continue
-
+            #print "point 2"
             for item in item_list:
 
 
@@ -464,13 +457,15 @@ def main(filing_type, time_threshold):
 
                 if item.contents[1].contents[0]!='8-K':
                     continue
+                #print "point 3"
                 form_web = get_web_address(item, time_threshold)
-                
+                #print form_web
                 # form_web = "https://www.sec.gov/Archives/edgar/data/1800/000104746913003504/0001047469-13-003504-index.htm"
                 if form_web == 0:
                     continue
-                document_web = get_general(form_web, cik, filing_type)
-                print document_web
+                #print "get general"
+                document_web = get_general(form_web, cik, filing_type,row_num,output_table)
+                #print document_web
                 if document_web == -1 or document_web == -2:
                     continue
                 # get the general information and return if the document is html(0) or txt(1) or other(2)
@@ -490,8 +485,8 @@ def main(filing_type, time_threshold):
                 if ft == -2:
                     continue
                 document = clean(ft, file_type)
-                #print document
-                item701801(document)
+                 #print document
+                item701801(document,row_num,output_table)
                 #well_season_issue(document)
                 #not_require_file(document)
                 #registrant_type(document)
@@ -499,12 +494,32 @@ def main(filing_type, time_threshold):
                 #coso(document)
                 row_num += 1
                 #if (row_num==10):break
-    cik_count += 1
-    print "%d of %d" % (cik_count, cik_total)
-    #if cik_count % 100 == 0:
-    #   output_file.save('output_'+filing_type+'.xls')
+    print 'thread'+str(i)+'to'+str(j)+'exits\n'
+    global count
+    count +=1
+    thread.exit_thread() 
+    
 
-    output_file.save('output_'+filing_type+'.xls')
+def start():
+    global output_file
+    global count
+    count = 0
+    output_file = xlwt.Workbook()
+    cik_list = get_cik_list()
+    #thread.start_new_thread(main,('8-K', '20040101',0,1001,cik_list))
+    #thread.start_new_thread(main,('8-K', '20040101',1001,2000,cik_list))
+    #thread.start_new_thread(main,('8-K', '20040101',2001,3000,cik_list))
+    #thread.start_new_thread(main,('8-K', '20040101',3001,4000,cik_list))
+    t1 = thread.start_new_thread(main,('8-K', '20040101',0,10,cik_list))
+    t2 = thread.start_new_thread(main,('8-K', '20040101',11,20,cik_list))
+    t3 = thread.start_new_thread(main,('8-K', '20040101',21,30,cik_list))
+    t4 = thread.start_new_thread(main,('8-K', '20040101',31,40,cik_list))
+    while(count != 4):
+        pass
+        
+    print 'all stread end'
+    output_file.save('output_8-k multithread.xls')
 
-main('8-K', '20040101')
+
+start()
 #main('10-KSB', '20000101')
