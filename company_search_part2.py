@@ -510,11 +510,10 @@ def start():
     #thread.start_new_thread(main,('8-K', '20040101',1001,2000,cik_list))
     #thread.start_new_thread(main,('8-K', '20040101',2001,3000,cik_list))
     #thread.start_new_thread(main,('8-K', '20040101',3001,4000,cik_list))
-    t1 = thread.start_new_thread(main,('8-K', '20040101',0,10,cik_list))
-    t2 = thread.start_new_thread(main,('8-K', '20040101',11,20,cik_list))
-    t3 = thread.start_new_thread(main,('8-K', '20040101',21,30,cik_list))
-    t4 = thread.start_new_thread(main,('8-K', '20040101',31,40,cik_list))
-    while(count != 4):
+    for i in range(0,26)
+    	thread.start_new_thread(main,('8-K', '20040101',i*1000,(i+1)*1000-1,cik_list))
+    thread.start_new_thread(main,('8-K', '20040101',26000,26322,cik_list))
+    while(count != 27):
         pass
         
     print 'all stread end'
